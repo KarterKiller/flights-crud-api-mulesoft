@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" 
+      xmlns="http://www.mulesoft.org/schema/mule/core" 
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" 
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" 
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns:http="http://www.mulesoft.org/schema/mule/http" 
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+      http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+      http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+      http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+      http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+
+    <http:listener-config name="flights-crud-api-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+
+    <apikit:config name="flights-crud-api-config" 
+        api="flights-crud-api.raml" 
+        outboundHeadersMapName="outboundHeaders" 
+        httpStatusVarName="httpStatus"/>
+
+<configuration-properties file="config.yaml" doc:name="Config"/>
+   <salesforce:sfdc-config name="Salesforce_Config" doc:name="Salesforce Config">
+    <salesforce:basic-connection 
+        username="${salesforce.username}" 
+        password="${salesforce.password}" 
+        securityToken="${salesforce.token}" 
+        url="${salesforce.url}"/>
+</salesforce:sfdc-config>
+
+    <flow name="flights-crud-api-main">
+        <http:listener config-ref="flights-crud-api-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="flights-crud-api-config"/>
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0 output application/json --- {message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0 output application/json --- {message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0 output application/json --- {message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <flow name="flights-crud-api-console">
+        <http:listener config-ref="flights-crud-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="flights-crud-api-config"/>
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0 output application/json --- {message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <!-- GET ALL FLIGHTS -->
+    <flow name="get:\flights:flights-crud-api-config">
+        <salesforce:query config-ref="Salesforce_Config" doc:name="Query All Flights">
+            <salesforce:salesforce-query>
+                SELECT Id, Name, FlightNumber__c, Compagny__c,
+                       Aircraft_type__c, DepartureDate__c,
+                       Origin__c, Destination__c, Status__c
+                FROM Flight__c
+                ORDER BY DepartureDate__c DESC
+            </salesforce:salesforce-query>
+        </salesforce:query>
+        <ee:transform doc:name="Transform to JSON">
+            <ee:message>
+                <ee:set-payload><![CDATA[
+                %dw 2.0
+                output application/json
+                ---
+                payload map (flight) -> {
+                    id: flight.Id,
+                    flightNumber: flight.FlightNumber__c default "",
+                    compagny: flight.Compagny__c default "",
+                    aircraftType: flight.Aircraft_type__c default "",
+                    departureDate: flight.DepartureDate__c as String default "",
+                    origin: flight.Origin__c default "",
+                    destination: flight.Destination__c default "",
+                    status: flight.Status__c default ""
+                }
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- GET FLIGHT BY ID -->
+<flow name="get:\flights\(id):flights-crud-api-config">
+    <set-variable variableName="flightId" 
+        value="#[attributes.uriParams.id]" 
+        doc:name="Set ID"/>
+    <salesforce:query config-ref="Salesforce_Config" doc:name="Query Flight by ID">
+        <salesforce:salesforce-query><![CDATA[
+            SELECT Id, Name, FlightNumber__c, Compagny__c,
+                   Aircraft_type__c, DepartureDate__c,
+                   Origin__c, Destination__c, Status__c
+            FROM Flight__c
+            WHERE Id = ':flightId'
+        ]]></salesforce:salesforce-query>
+        <salesforce:parameters><![CDATA[
+        #[{'flightId': vars.flightId}]
+        ]]></salesforce:parameters>
+    </salesforce:query>
+    <ee:transform doc:name="Transform to JSON">
+        <ee:message>
+            <ee:set-payload><![CDATA[
+            %dw 2.0
+            output application/json
+            ---
+            if (sizeOf(payload) > 0)
+                payload[0] mapObject (value, key) -> {
+                    (key): value
+                }
+            else
+                { message: "Flight not found" }
+            ]]></ee:set-payload>
+        </ee:message>
+    </ee:transform>
+</flow>
+
+    <!-- POST CREATE FLIGHT -->
+<flow name="post:\flights:application\json:flights-crud-api-config">
+    <ee:transform doc:name="Transform to Salesforce">
+        <ee:message>
+            <ee:set-payload><![CDATA[
+            %dw 2.0
+            output application/java
+            ---
+            [{
+                "Name": payload.flightNumber,
+                "FlightNumber__c": payload.flightNumber,
+                "Compagny__c": payload.compagny default "",
+                "Aircraft_type__c": payload.aircraftType default "",
+                "DepartureDate__c": payload.departureDate as Date default (now() as Date),
+                "Origin__c": payload.origin default "",
+                "Destination__c": payload.destination default "",
+                "Status__c": payload.status default "On Ground 🛬"
+            }]
+            ]]></ee:set-payload>
+        </ee:message>
+    </ee:transform>
+    <salesforce:create type="Flight__c"
+        config-ref="Salesforce_Config"
+        doc:name="Create Flight"/>
+    <ee:transform doc:name="Return Response">
+        <ee:message>
+            <ee:set-payload><![CDATA[
+            %dw 2.0
+            output application/json
+            ---
+            {
+                id: payload.items[0].id,
+                message: "Flight created successfully"
+            }
+            ]]></ee:set-payload>
+        </ee:message>
+        <ee:variables>
+            <ee:set-variable variableName="httpStatus">201</ee:set-variable>
+        </ee:variables>
+    </ee:transform>
+</flow>
+    <!-- PUT UPDATE FLIGHT -->
+    <flow name="put:\flights\(id):application\json:flights-crud-api-config">
+        <set-variable variableName="flightId" 
+            value="#[attributes.uriParams.id]" 
+            doc:name="Set ID"/>
+        <ee:transform doc:name="Transform to Salesforce">
+            <ee:message>
+                <ee:set-payload><![CDATA[
+                %dw 2.0
+                output application/java
+                ---
+                [{
+                    "Id": vars.flightId,
+                    "FlightNumber__c": payload.flightNumber default "",
+                    "Compagny__c": payload.compagny default "",
+                    "Aircraft_type__c": payload.aircraftType default "",
+                    "DepartureDate__c": payload.departureDate as Date default (now() as Date),
+                    "Origin__c": payload.origin default "",
+                    "Destination__c": payload.destination default "",
+                    "Status__c": payload.status default ""
+                }]
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce:update type="Flight__c" 
+            config-ref="Salesforce_Config" 
+            doc:name="Update Flight"/>
+        <ee:transform doc:name="Return Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[
+                %dw 2.0
+                output application/json
+                ---
+                { message: "Flight updated successfully" }
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+    </flow>
+
+    <!-- DELETE FLIGHT -->
+    <flow name="delete:\flights\(id):flights-crud-api-config">
+        <set-variable variableName="flightId" 
+            value="#[attributes.uriParams.id]" 
+            doc:name="Set ID"/>
+        <ee:transform doc:name="Prepare ID">
+            <ee:message>
+                <ee:set-payload><![CDATA[
+                %dw 2.0
+                output application/java
+                ---
+                [vars.flightId]
+                ]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <salesforce:delete config-ref="Salesforce_Config" 
+            doc:name="Delete Flight"/>
+        <ee:transform doc:name="Return Response">
+            <ee:message>
+                <ee:set-payload><![CDATA[
+                %dw 2.0
+                output application/json
+                ---
+                { message: "Flight deleted successfully" }
+                ]]></ee:set-payload>
+            </ee:message>
+            <ee:variables>
+                <ee:set-variable variableName="httpStatus">204</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+    </flow>
+
+</mule>

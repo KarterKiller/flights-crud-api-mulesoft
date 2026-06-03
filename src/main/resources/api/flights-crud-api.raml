@@ -1,0 +1,72 @@
+#%RAML 1.0
+title: Flights CRUD API
+version: v1
+baseUri: http://localhost:8081/api
+
+types:
+  Flight:
+    properties:
+      id?: string
+      flightNumber: string
+      compagny: string
+      aircraftType: string
+      departureDate: string
+      origin: string
+      destination: string
+      status?: string
+
+/flights:
+  get:
+    description: Get all flights
+    responses:
+      200:
+        body:
+          application/json:
+            type: Flight[]
+
+  post:
+    description: Create a new flight
+    body:
+      application/json:
+        type: Flight
+    responses:
+      201:
+        body:
+          application/json:
+            example: |
+              { "id": "a0x000000000001", "message": "Flight created" }
+
+  /{id}:
+    get:
+      description: Get a flight by ID
+      responses:
+        200:
+          body:
+            application/json:
+              type: Flight
+        404:
+          body:
+            application/json:
+              example: |
+                { "message": "Flight not found" }
+
+    put:
+      description: Update a flight
+      body:
+        application/json:
+          type: Flight
+      responses:
+        200:
+          body:
+            application/json:
+              example: |
+                { "message": "Flight updated" }
+
+    delete:
+      description: Delete a flight
+      responses:
+        204:
+          body:
+            application/json:
+              example: |
+                { "message": "Flight deleted" }
