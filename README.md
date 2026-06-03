@@ -1,3 +1,15 @@
+## 🚀 Live Demo
+Base URL : `https://flights-crud-api-lxelir.5sc6y6-4.usa-e2.cloudhub.io`
+
+| Method | Endpoint | 
+|---|---|
+| GET | /api/flights |
+| GET | /api/flights/{id} |
+| POST | /api/flights |
+| PUT | /api/flights/{id} |
+| DELETE | /api/flights/{id} |
+
+
 # ✈️ Flights CRUD API — MuleSoft
 
 > 🇬🇧 English version | 🇫🇷 Version française ci-dessous
