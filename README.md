@@ -99,7 +99,8 @@ API REST CRUD complète pour gérer les enregistrements Salesforce Flight__c via
 ## 📸 Screenshots
 
 ### API Flow — Anypoint Studio
-![Flow](screenshots/flow.png)
+![Flow](screenshots/anypointStudioCrud1.png)
+![Flow](screenshots/anypointStudioCrud2.png)
 
 ### Postman Tests
 ![Postman GET](screenshots/postman-get.png)
